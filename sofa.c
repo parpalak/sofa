@@ -2,149 +2,221 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define PI 3.1415926535897932384626
-#define PARAM 2
+#define PARAM_NUM 40
 
-double delta=0.001;
+typedef struct {
+    double x;
+    double y;
+} point;
+
+typedef struct {
+    double top;
+    double bottom;
+} interval;
 
 int n = 10000;
-int m = 10000;
-double *up, *down;
-double a[PARAM];
+int interval_num = 10000; // должен быть четным
+interval *v;
+double a[PARAM_NUM];
 
-double integral () {
-	double alpha, x1, y1, x2, y2, tmp, tg, ctg, shift, mult;
-	int i, j, k;
-
-	double len;
-//	len = 2 + 2 * (a[0] + a[1] + a[8] + a[9] + a[10] + a[11]);
-
-	for (i = m+1; i--; ) {
-		up[i] = 1;
-		down[i] = 0;
-	}
-	
-	len = 0;
-	for (j = 0; j < PARAM/2; j++) {
-		len += a[2*j];
-	}
-	
-	len = 2 + 2 * len;
-
-	for (i = 1; i < n; i++) {
-		alpha = PI*(double)i/n*0.5;// + PI/n*0.25;
-		tg = tan(alpha);
-		ctg = -1/tg;
-//		x1 = a[0]*cos(2*alpha) + a[1]*cos(6*alpha) + a[8]*cos(10*alpha) + a[9]*cos(14*alpha) + a[10]*cos(18*alpha) + a[11]*cos(22*alpha);  // + alpha*a[]
-//		y1 = a[2]*sin(2*alpha) + a[3]*sin(6*alpha) + a[4]*sin(10*alpha) + a[5]*sin(14*alpha) + a[6]*sin(18*alpha) + a[7]*sin(22*alpha);
-		x1 = a[0]*cos(2*alpha);
-		y1 = a[0]*sin(2*alpha);
-/*		for (j = 0; j < PARAM/2; j++) {
-		    x1 += a[2*j]*cos (alpha*2*(2*j+1));
-		    y1 += a[2*j + 1]*sin (alpha*2*(2*j+1));
-		}*/
-		x2 = x1 + sqrt(2) * cos(PI/4 + alpha);
-		y2 = y1 + sqrt(2) * sin(PI/4 + alpha);
-
-		// Upper curve
-		k = (int)((x2 / len + 0.5) * m);
-		mult = tg * len/m;
-		shift = y2 - tg * (x2 + len * 0.5);
-		tmp = shift;
-		for (j = 0; j < k; j++) {
-//			tmp = shift + mult * (double)j ;
-			if (up[j] > tmp)
-				up[j] = tmp;
-			tmp += mult;
-		}
-		mult = ctg * len/m;
-		shift = y2 - ctg * (x2 + len * 0.5);
-		tmp = shift + mult * (k+1);
-		for (j = k+1; j < m+1; j++) {
-//			tmp = shift + mult * (double)j ;
-			if (up[j] > tmp)
-				up[j] = tmp;
-			tmp += mult;
-		}
-
-		// Lower curve
-		k = (int)((x1 / len + 0.5) * m);
-		mult = tg * len/m;
-		shift = y1 - tg * (x1 + len * 0.5);
-		tmp = shift;// + mult * (double)j ;
-		for (j = 0; j < k; j++) {
-			if (down[j] < tmp)
-				down[j] = tmp;
-			tmp += mult;
-		}
-		mult = ctg * len/m;
-		shift = y1 - ctg * (x1 + len * 0.5);
-		tmp = shift + mult * (k+1);
-		for (j = k+1; j < m+1; j++) {
-//			tmp = shift + mult * (double)j ;
-			if (down[j] < tmp)
-				down[j] = tmp;
-			tmp += mult;
-		}
-	}
-
-	// Integriren
-	tmp = 0;
-	for (j = 1; j < m; j+=2) {
-//		printf("j=%d\n", j);
-		if (up[j] >= down[j]) {
-			tmp += 4*(up[j] - down[j]);
-		}
-		if (up[j+1] >= down[j+1]) {
-			tmp += 2*(up[j+1] - down[j+1]);
-		}
-	}
-	if (up[0] >= down[0]) {
-		tmp += (up[0] - down[0]);
-	}
-	if (up[m] >= down[m]) {
-		tmp -= (up[m] - down[m]);
-	}
-	return tmp/m*len/3;
+void init_sofa(int interval_num, interval x[]) {
+    for (int i = interval_num + 1; i--;) {
+        x[i].top = 1;
+        x[i].bottom = 0;
+    }
 }
 
-double integral1() {
-	return sin(a[0]);//- (a[0] - 2) * (a[0] - 2) - (a[0] - 4)*(a[0] - 4);
+point get_lower_corner(const double alpha, const double params[]) {
+    point p;
+
+    p.x = 0;// params[0] * cos(2 * alpha);
+    p.y = 0;// params[0] * sin(2 * alpha);
+
+    for (int j = 0; j < PARAM_NUM / 2; j++) {
+        p.x += params[2 * j] * cos(alpha * 2 * (2 * j + 1));
+        p.y += params[2 * j + 1] * sin(alpha * 2 * (2 * j + 1));
+    }
+
+    return p;
 }
 
-void maximize () {
-	double grad[PARAM], comp, scal, f, f1 = 1, f2 = 0, q = 0.5, fff;
-	int i;
+point get_upper_corner(const double alpha, const point lower_corner) {
+    point p;
+    p.x = lower_corner.x + sqrt(2) * cos(M_PI / 4 + alpha);
+    p.y = lower_corner.y + sqrt(2) * sin(M_PI / 4 + alpha);
 
-	f = integral();
-	f1 = f-0.1;
-	f2 = f-0.2;
-	scal = 1;
-	while (/*n*n*fabs(f-f1) > 0.01*(1-q)*/scal*n*n > -0.01) {
+    return p;
+}
 
-	//	scal = 0;
-		for (i = 0; i < PARAM; i++) {
-			a[i] += 1.0e-9;
-			fff = integral();
-			comp = (fff - f) * 1.0e9;
-	//		scal += comp*grad[i];
-			grad[i] = comp;
-//			printf("i=%d; int = %f; grad = %f; \n", i, fff, grad[i]);
-			a[i] -= 1.0e-9;
-		}
-		scal = 0;
-		for (i = 0; i < PARAM; i++) {
-			a[i] += delta*grad[i];
-			scal += delta*grad[i]*delta*grad[i];
-			printf("a[%i] = %5.80f;\n", i, a[i]);
-		}
-		f2 = f1;
-		f1 = f;
-		f = integral();
-		q = (f-f1)/(f1-f2);
-		printf("-------------->>> int = %5.10f; q=%f\n", f, q);
-		if (q < 0.5) q = 0.5;
- 	}
+// Интегрирование методом Симпсона
+double integrate(const double sofa_length, const int interval_num, const interval *x) {
+    double result = 0.0;
+
+    if (x[0].top > x[0].bottom) {
+        result += (x[0].top - x[0].bottom);
+    }
+
+    int j = 1;
+    while (j < interval_num) {
+        if (x[j].top > x[j].bottom) {
+            result += 4 * (x[j].top - x[j].bottom);
+        }
+        j++;
+
+        if (x[j].top > x[j].bottom) {
+            result += 2 * (x[j].top - x[j].bottom);
+        }
+        j++;
+    }
+
+    // Выше в цикле прибавили лишнего, вычитаем вместо прибавления
+    if (x[interval_num].top >= x[interval_num].bottom) {
+        result -= (x[interval_num].top - x[interval_num].bottom);
+    }
+
+    return result / interval_num * sofa_length / 3.0;
+}
+
+double get_area(const int interval_num, const int positions_num, const double *params, interval *x) {
+    const double sofa_length = 2 * get_lower_corner(0, params).x + 2;
+
+    init_sofa(interval_num, x);
+
+    for (int i = 1; i < positions_num; i++) {
+        int j, k;
+        double y, shift_at_zero_index, boundary_change_for_interval;
+
+        double alpha = M_PI * (double) i / positions_num * 0.5;// + PI/positions_num*0.25;
+        double tg = tan(alpha);
+        double ctg = -1 / tg;
+
+        point lower_corner = get_lower_corner(alpha, params);
+        point upper_corner = get_upper_corner(alpha, lower_corner);
+
+        // Top curve
+        k = (int) ((upper_corner.x / sofa_length + 0.5) * interval_num);
+        boundary_change_for_interval = tg * sofa_length / interval_num;
+        shift_at_zero_index = upper_corner.y - tg * (upper_corner.x + sofa_length * 0.5);
+        y = shift_at_zero_index;
+        for (j = 0; j < k; j++) {
+            if (x[j].top > y)
+                x[j].top = y;
+            y += boundary_change_for_interval;
+        }
+
+        k = (int) ((upper_corner.x / sofa_length + 0.5) * interval_num);
+        boundary_change_for_interval = ctg * sofa_length / interval_num;
+        shift_at_zero_index = upper_corner.y - ctg * (upper_corner.x + sofa_length * 0.5);
+        y = shift_at_zero_index + boundary_change_for_interval * (k + 1);
+        for (j = k + 1; j < interval_num + 1; j++) {
+            if (x[j].top > y)
+                x[j].top = y;
+            y += boundary_change_for_interval;
+        }
+
+        // Bottom curve
+        k = (int) ((lower_corner.x / sofa_length + 0.5) * interval_num);
+        boundary_change_for_interval = tg * sofa_length / interval_num;
+        shift_at_zero_index = lower_corner.y - tg * (lower_corner.x + sofa_length * 0.5);
+        y = shift_at_zero_index;
+        for (j = 0; j < k; j++) {
+            if (x[j].bottom < y)
+                x[j].bottom = y;
+            y += boundary_change_for_interval;
+        }
+        boundary_change_for_interval = ctg * sofa_length / interval_num;
+        shift_at_zero_index = lower_corner.y - ctg * (lower_corner.x + sofa_length * 0.5);
+        y = shift_at_zero_index + boundary_change_for_interval * (k + 1);
+        for (j = k + 1; j < interval_num + 1; j++) {
+            if (x[j].bottom < y)
+                x[j].bottom = y;
+            y += boundary_change_for_interval;
+        }
+    }
+
+    return integrate(sofa_length, interval_num, x);
+}
+
+void maximize(const int interval_num, const int positions_num, double params[], interval x[]) {
+    double grad[PARAM_NUM], new_params[PARAM_NUM], q = 0.5;
+    int i;
+
+    // С чего-то начинаем
+    double f = get_area(interval_num, positions_num, params, x);
+    double f_prev = f - 0.1;
+    double f_prev2 = f - 0.2;
+
+    while (1 /*positions_num*positions_num*fabs(f-f_prev) > 0.01*(1-q)*/) {
+
+        // Вычисляем градиент
+        for (i = 0; i < PARAM_NUM; i++) {
+            double old_param = params[i];
+
+            params[i] += 1.0e-9;
+            double changed_f = get_area(interval_num, positions_num, params, x);
+            params[i] = old_param;
+
+            grad[i] = (changed_f - f) * 1.0e9;
+//			printf("i=%d; int = %f; grad = %f; \positions_num", i, changed_f, grad[i]);
+        }
+
+        // Пытаемся понять, на какой шаг можно пройти вперед.
+
+        // Сначала отступаем немного.
+        double lambda = 1.0e-5;
+        for (i = 0; i < PARAM_NUM; i++) {
+            new_params[i] = params[i] + lambda * grad[i];
+        }
+        double f_at_lambda = get_area(interval_num, positions_num, new_params, x);
+
+        printf("               int = %5.10f; lambda=%e\n", f_at_lambda, lambda);
+
+        double multiplier = (f_at_lambda > f) ? 10 : 0.1;
+        while (lambda < 100 && lambda > 1.0e-10) {
+            // Затем отступаем больше и сравниваем, что получилось
+            double lambda2 = lambda * multiplier;
+            for (i = 0; i < PARAM_NUM; i++) {
+                new_params[i] = params[i] + lambda2 * grad[i];
+            }
+            double f_at_lambda2 = get_area(interval_num, positions_num, new_params, x);
+
+            printf("               int = %5.10f; lambda=%e\n", f_at_lambda2, lambda2);
+
+            // Увеличение шага ничего не дает, ну и ладно.
+            if (f_at_lambda2 < f_at_lambda && f_at_lambda > f) {
+                // Если шаг уменьшаем, убеждаемся, что действительно нашли точку максимума лучше, чем было
+                break;
+            }
+
+            // Увеличение помогло, пробуем еще.
+            lambda = lambda2;
+            f_at_lambda = f_at_lambda2;
+        }
+
+        for (i = 0; i < PARAM_NUM; i++) {
+            // Отступаем на найденный шаг по найденному градиенту.
+            params[i] += lambda * grad[i];
+            printf("a[%i] = %5.80f;\n", i, params[i]);
+        }
+
+        f_prev2 = f_prev;
+        f_prev = f;
+        f = f_at_lambda;
+        q = (f - f_prev) / (f_prev - f_prev2);
+        printf("-------------->>> int = %5.10f; q=%5.10f; lambda=%e, positions_num=%d\n", f, q, lambda, positions_num);
+
+        if (lambda <= 1.0e-10) {
+            break;
+        }
+
+        if (q < 0) {
+            printf("ERROR\n");
+            exit(0);
+        }
+        if (q < 0.5) {
+            q = 0.5;
+        }
+    }
 
 }
 
@@ -161,58 +233,45 @@ int main() {
 	a[8] = 0.001329;
 	a[9] = 0.000630;
 */
-a[0] = 0.60232410931196911363372237246949225664138793945312500000000000000000000000000000;
-/*a[1] = 0.66492529928521126869611634901957586407661437988281250000000000000000000000000000;
-a[2] = 0.00501101142231514563862848632425084360875189304351806640625000000000000000000000;
-a[3] = 0.00588647110343982604002688319155822682660073041915893554687500000000000000000000;
-a[4] = 0.00170422785178545358429624823060066773905418813228607177734375000000000000000000;
-a[5] = 0.00176842187701479265811432828314764265087433159351348876953125000000000000000000;
-a[6] = 0.00075047220417299444986808376611975290870759636163711547851562500000000000000000;
-a[7] = 0.00044696608861735084633134973408630230551352724432945251464843750000000000000000;
-a[8] = 0.00041890673254529891969891175484974610299104824662208557128906250000000000000000;
-a[9] = 0.00028905603525181198642374225116213892761152237653732299804687500000000000000000;
-a[10] = 0.00029036933972159673089663556311279535293579101562500000000000000000000000000000;
-a[11] = 0.00012478991932584921221299767424284254957456141710281372070312500000000000000000;
-a[12] = 0.00017227114514950514490010391455143690109252929687500000000000000000000000000000;
-a[13] = 0.00008703274841392881521536656341808679826499428600072860717773437500000000000000;
-a[14] = 0.00013028575040063827827907516621053218841552734375000000000000000000000000000000;
-a[15] = 0.00005368305416197927115717902779579162597656250000000000000000000000000000000000;
-a[16] = 0.00008393711985998918189474243822800758607627358287572860717773437500000000000000;
-a[17] = 0.00003141406773599086932335922028869390487670898437500000000000000000000000000000;
-a[18] = 0.00006868629850176331851693140029269102342368569225072860717773437500000000000000;
-a[19] = 0.00002962587513888336959526868807923705162465921603143215179443359375000000000000;
-a[20] = 0.00004518909339079613118883571587502956390380859375000000000000000000000000000000;
-a[21] = 0.00001216173684737142765457506426995948345393117051571607589721679687500000000000;
-a[22] = 0.00004387762739810341372503899037837982177734375000000000000000000000000000000000;
-a[23] = 0.00001557025921794518924317317354333312096059671603143215179443359375000000000000;
-a[24] = 0.00002965944991251134526893083742660195412099710665643215179443359375000000000000;
-a[25] = 0.00000609763444003874441237244424796060116022999864071607589721679687500000000000;
-a[26] = 0.00002624149470609182799307745881378650665283203125000000000000000000000000000000;
-a[27] = 0.00000594576452206396766086982097476720809936523437500000000000000000000000000000;
-a[28] = 0.00002424125423772238718811422586441040039062500000000000000000000000000000000000;
-a[29] = 0.00000288723334618268268059182446449995040893554687500000000000000000000000000000;
-a[30] = 0.00001731032141405464130912150721997022628784179687500000000000000000000000000000;
-a[31] = 0.00000411358715712850653289933688938617706298828125000000000000000000000000000000;
-a[32] = 0.00000047769184963186717141070403158664703369140625000000000000000000000000000000;
-a[33] = 0.00000099049334512102404914912767708301544189453125000000000000000000000000000000;
-a[34] = 0.00000000880236772360376562573947012424468994140625000000000000000000000000000000;
-a[35] = 0.00000060809509960790819604881107807159423828125000000000000000000000000000000000;
-a[36] = -0.00000021854383236430408032902050763368606567382812500000000000000000000000000000;
-a[37] = 0.00000075138793498297218320658430457115173339843750000000000000000000000000000000;
-a[38] = -0.00000057508274009521187508653383702039718627929687500000000000000000000000000000;
-a[39] = 0.00000055269872545338216696109157055616378784179687500000000000000000000000000000;
-*/
-	delta = 0.01;
-	for (n=10000; n<1000000; n*=10) {	    
-		m = n;
-		printf("----------------->>> n = %d, m = %d\n", n, m);
-//		delta = 1.0/n;
-    		up = (double *) malloc((m + 1) * sizeof(double));
-		down = (double *) malloc((m + 1) * sizeof(double));
-		maximize();
-		free(up);
-		free(down);
-	}
-//	printf("int = %f", integral());
-	return 0;
+    a[0] = 0.60265324154425170544158163465908728539943695068359375000000000000000000000000000;
+    a[1] = 0.66507963190437369149776714039035141468048095703125000000000000000000000000000000;
+    a[2] = 0.00453773100691790172434014749569541891105473041534423828125000000000000000000000;
+    a[3] = 0.00588952547592623033845260493990281247533857822418212890625000000000000000000000;
+    a[4] = 0.00153583989475173429001264580051611119415611028671264648437500000000000000000000;
+    a[5] = 0.00175907100299416228189608446541569719556719064712524414062500000000000000000000;
+    a[6] = 0.00071754172280549105827213152153376540809404104948043823242187500000000000000000;
+    a[7] = 0.00045681566437125496011814607122403231187490746378898620605468750000000000000000;
+    a[8] = 0.00041501851707649519036824603546165235457010567188262939453125000000000000000000;
+    a[9] = 0.00029094140850572568430046360710150565864751115441322326660156250000000000000000;
+    a[10] = 0.00031011609052774332523361167091024981345981359481811523437500000000000000000000;
+    a[11] = 0.00012956069822851217139027257818639782271930016577243804931640625000000000000000;
+    a[12] = 0.00019478031459025047173252986887348470190772786736488342285156250000000000000000;
+    a[13] = 0.00009410431256871465042438545944847305690927896648645401000976562500000000000000;
+    a[14] = 0.00016046766343685628093511386094149884229409508407115936279296875000000000000000;
+    a[15] = 0.00005792883490757016811886770391026857396354898810386657714843750000000000000000;
+    a[16] = 0.00010772002913539858049568609388302320439834147691726684570312500000000000000000;
+    a[17] = 0.00003778814825940114609931219646909994480665773153305053710937500000000000000000;
+    a[18] = 0.00008645587684857233248987562479470625476096756756305694580078125000000000000000;
+    a[19] = 0.00003519308996982051376345781990018224405503133311867713928222656250000000000000;
+    a[20] = 0.00006318477054875420799960605844347583115450106561183929443359375000000000000000;
+    a[21] = 0.00001984241807511111165235155595620852864158223383128643035888671875000000000000;
+    a[22] = 0.00004431844865500079696032931231286511319922283291816711425781250000000000000000;
+    a[23] = 0.00001631946427648855906856507902435993173639872111380100250244140625000000000000;
+    a[24] = 0.00003503726635226462227286348127819337605615146458148956298828125000000000000000;
+    a[25] = 0.00001035462496703942469617864413633512299384165089577436447143554687500000000000;
+    a[26] = 0.00001231895210328293073498689275124817754658579360693693161010742187500000000000;
+    a[27] = 0.00001358541624575160784520709567058105449177674017846584320068359375000000000000;
+    a[28] = 0.00001452017027942621489545928920028572406408784445375204086303710937500000000000;
+    a[29] = 0.00001053854992125293686634421308490061619522748515009880065917968750000000000000;
+
+
+    for (n = 1000; n < 1000000; n *= 10) {
+        interval_num = n;
+        printf("----------------->>> n = %d, interval_num = %d\n", n, interval_num);
+        v = (interval *) malloc((interval_num + 1) * sizeof(interval));
+        maximize(interval_num, n, a, v);
+        free(v);
+    }
+//	printf("int = %f", get_area());
+    return 0;
 }
